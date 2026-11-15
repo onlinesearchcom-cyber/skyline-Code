@@ -7,7 +7,12 @@
   "scripts": {
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "build": "vite build",
-    "start": "electron ."
+    "start": "electron .",
+    "test": "node --test",
+    "test:ui": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.electron.json",
+    "check": "npm run lint && npm test && npm run test:ui && npm run typecheck && npm run build"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -16,14 +21,29 @@
     "lucide-react": "^0.468.0",
     "monaco-editor": "^0.52.2",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.10",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@types/yauzl": "^3.4.0",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "electron": "^45.3.2",
+    "eslint": "^9.0.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.0.0",
+    "jsdom": "^31.0.1",
+    "typescript": "^7.0.2",
     "vite": "^6.0.5",
+    "vitest": "^5.1.0",
     "wait-on": "^8.0.1"
   }
 }

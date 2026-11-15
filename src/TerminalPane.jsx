@@ -5,6 +5,8 @@ import "@xterm/xterm/css/xterm.css";
 
 export default function TerminalPane({ workspace, onError }) {
   const hostRef = useRef(null);
+  const workspaceRoot = workspace?.root;
+  const workspaceName = workspace?.name;
 
   useEffect(() => {
     if (!hostRef.current) return undefined;
@@ -36,8 +38,8 @@ export default function TerminalPane({ workspace, onError }) {
     const resizeObserver = new ResizeObserver(() => fitAddon.fit());
     resizeObserver.observe(hostRef.current);
 
-    if (workspace) {
-      terminal.writeln(`Skyline Code terminal · ${workspace.name}`);
+    if (workspaceRoot) {
+      terminal.writeln(`Skyline Code terminal · ${workspaceName}`);
       window.skyline.startTerminal().catch((error) => {
         onError(`Could not start terminal: ${error.message}`);
       });
@@ -52,7 +54,7 @@ export default function TerminalPane({ workspace, onError }) {
       removeExitListener();
       terminal.dispose();
     };
-  }, [workspace?.root]);
+  }, [workspaceRoot, workspaceName, onError]);
 
   return <div ref={hostRef} className="terminal-host" />;
 }
