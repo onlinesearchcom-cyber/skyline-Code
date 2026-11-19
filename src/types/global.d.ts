@@ -90,6 +90,10 @@ interface SkylineBridge {
   gitUnstage(path: string): Promise<{ branch: string; files: SkylineGitFile[] }>;
   gitCommit(message: string): Promise<{ branch: string; files: SkylineGitFile[] }>;
   gitDiff(path: string, staged: boolean): Promise<string>;
+  runFile(path: string): Promise<{ running: boolean }>;
+  stopRun(): void;
+  onRunOutput(callback: (output: string) => void): () => void;
+  onRunExit(callback: (code: number | null) => void): () => void;
   startTerminal(): Promise<{ running: boolean }>;
   writeTerminal(data: string): void;
   stopTerminal(): void;

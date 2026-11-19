@@ -32,11 +32,14 @@ const {
   normalizeAgentMessages,
   parseAgentToolCall,
 } = require("./ai-agent.cjs");
+const { getRunnableFileCommand } = require("./run-file.cjs");
 
 const execFileAsync = promisify(execFile);
 let workspaceRoot = null;
 let terminalProcess = null;
 let terminalSender = null;
+let runProcess = null;
+let runSender = null;
 let mainWindow = null;
 let workspaceDirty = false;
 let closeRequestPending = false;
@@ -353,6 +356,7 @@ const activateWorkspace = async (root) => {
 
   stopWorkspaceWatcher();
   stopTerminal();
+  stopRun();
   workspaceRoot = root;
   startWorkspaceWatcher(root);
   return { root, name: path.basename(root), tree, recent };
@@ -428,6 +432,12 @@ const stopTerminal = () => {
   if (terminalProcess && !terminalProcess.killed) terminalProcess.kill();
   terminalProcess = null;
   terminalSender = null;
+};
+
+const stopRun = (sender = null) => {
+  if (runProcess && (!sender || sender === runSender) && !runProcess.killed) {
+    runProcess.kill();
+  }
 };
 
 const walkFiles = async (directory, callback, state) => {
@@ -1028,6 +1038,59 @@ ipcMain.handle("git:diff", async (_event, relativePath, staged) => {
   return stdout;
 });
 
+ipcMain.handle("file:run", async (event, relativePath) => {
+  if (event.sender !== mainWindow?.webContents || typeof relativePath !== "string") {
+    throw new Error("Invalid run-file request.");
+  }
+  if (runProcess) throw new Error("A file is already running.");
+
+  const root = getWorkspaceRoot();
+  const filePath = await resolveInsideWorkspace(relativePath);
+  const stat = await fs.stat(filePath);
+  if (!stat.isFile()) throw new Error("Choose a file inside the open workspace.");
+
+  const { executable, args } = getRunnableFileCommand(filePath, process.platform);
+  const child = spawn(executable, args, { cwd: root, windowsHide: true });
+  const sender = event.sender;
+  const maximumOutputBytes = 1024 * 1024;
+  let outputBytes = 0;
+  let outputLimitReached = false;
+  runProcess = child;
+  runSender = sender;
+
+  const sendOutput = (chunk) => {
+    if (runProcess !== child || runSender !== sender) return;
+    const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+    const remaining = maximumOutputBytes - outputBytes;
+    if (remaining > 0) {
+      sender.send("run:output", data.subarray(0, remaining).toString("utf8"));
+      outputBytes += Math.min(data.length, remaining);
+    }
+    if (data.length > remaining && !outputLimitReached) {
+      outputLimitReached = true;
+      sender.send("run:output", "\r\n[Output limit reached; stopping the process.]\r\n");
+      child.kill();
+    }
+  };
+
+  child.stdout.on("data", sendOutput);
+  child.stderr.on("data", sendOutput);
+  child.on("error", (error) => sendOutput(`Could not start ${executable}: ${error.message}\r\n`));
+  child.on("close", (code) => {
+    sender.send("run:exit", code);
+    if (runProcess === child) {
+      runProcess = null;
+      runSender = null;
+    }
+  });
+
+  return { running: true };
+});
+
+ipcMain.on("file:run-stop", (event) => {
+  stopRun(event.sender);
+});
+
 ipcMain.handle("terminal:start", async (event) => {
   const root = getWorkspaceRoot();
   if (terminalProcess && !terminalProcess.killed) {
@@ -1090,4 +1153,7 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", stopTerminal);
+app.on("before-quit", () => {
+  stopTerminal();
+  stopRun();
+});

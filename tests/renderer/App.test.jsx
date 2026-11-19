@@ -27,6 +27,8 @@ const initialWorkspace = {
 let closeRequest;
 let workspaceChange;
 let extensionRuntimeEvent;
+let runOutputEvent;
+let runExitEvent;
 let skyline;
 
 const openFile = async (user) => {
@@ -55,6 +57,8 @@ beforeEach(() => {
   closeRequest = null;
   workspaceChange = null;
   extensionRuntimeEvent = null;
+  runOutputEvent = null;
+  runExitEvent = null;
 
   skyline = {
     restoreWorkspace: vi.fn().mockResolvedValue(initialWorkspace),
@@ -113,6 +117,16 @@ beforeEach(() => {
     gitUnstage: vi.fn(),
     gitCommit: vi.fn(),
     gitDiff: vi.fn(),
+    runFile: vi.fn().mockResolvedValue({ running: true }),
+    stopRun: vi.fn(),
+    onRunOutput: vi.fn((callback) => {
+      runOutputEvent = callback;
+      return () => {};
+    }),
+    onRunExit: vi.fn((callback) => {
+      runExitEvent = callback;
+      return () => {};
+    }),
     startTerminal: vi.fn().mockResolvedValue({ running: true }),
     writeTerminal: vi.fn(),
     stopTerminal: vi.fn(),
@@ -401,5 +415,39 @@ describe("unsaved editor changes", () => {
       "version-1",
     ));
     expect(await screen.findByText("The approved edit is in place.")).toBeInTheDocument();
+  });
+});
+
+describe("running the active file", () => {
+  it("runs a JavaScript file and shows output and the exit status", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openFile(user);
+
+    await user.click(screen.getByRole("button", { name: "Run current file" }));
+    await waitFor(() => expect(skyline.runFile).toHaveBeenCalledWith("app.js"));
+    expect(await screen.findByText("Running current file")).toBeInTheDocument();
+
+    act(() => runOutputEvent("hello from app"));
+    expect(await screen.findByText(/hello from app/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Stop", exact: true }));
+    expect(skyline.stopRun).toHaveBeenCalled();
+    act(() => runExitEvent(0));
+    expect(await screen.findByText(/\[Process exited with code 0\]/)).toBeInTheDocument();
+  });
+
+  it("saves unsaved changes before running the file", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await editFile(user, "console.log('saved first')");
+
+    await user.click(screen.getByRole("button", { name: "Run current file" }));
+    await waitFor(() => expect(skyline.runFile).toHaveBeenCalledWith("app.js"));
+
+    expect(skyline.saveFile).toHaveBeenCalledWith("app.js", "console.log('saved first')", "version-1");
+    expect(skyline.saveFile.mock.invocationCallOrder[0]).toBeLessThan(
+      skyline.runFile.mock.invocationCallOrder[0],
+    );
   });
 });

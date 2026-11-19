@@ -19,6 +19,7 @@ Production renderer build ke liye `npm run build` chalao; uske baad `npm start` 
 - Workspace text search (line numbers ke saath), integrated shell terminal
 - Git status, files stage/unstage, diff dekhna aur commit karna
 - Monaco diagnostics/problems panel aur saved editor preferences
+- Editor se current JavaScript (`.js`, `.cjs`, `.mjs`) ya Python (`.py`) file run karna, output dekhna aur process stop karna
 - `Ctrl+K` command palette, `Ctrl+Shift+F` search, `Ctrl+\`` terminal
 - Unsaved tabs ko close, folder switch ya app exit karte waqt Save / Don't Save / Cancel prompt
 - Last workspace restore, recent workspace list aur `Ctrl+W` se tab close
@@ -77,6 +78,7 @@ Maqsad ek reliable, extensible VS Code-style editor banana hai. Feature parity e
 
 ### Phase 5 — Roz ke development workflows
 
+- [x] Editor se current JavaScript/Python file run karna aur output/exit status dekhna
 - Maujooda Git support ko branches, history, hunk staging, discard/revert aur conflict resolution tak badhana
 - Multiple terminal sessions, terminal tabs aur shell selection
 - Tasks/build commands, Problems panel se diagnostics par jump, test discovery/run results
@@ -102,4 +104,4 @@ Maqsad ek reliable, extensible VS Code-style editor banana hai. Feature parity e
 
 ### Pehla implementation target
 
-Phase 1 ke core flows tests ke saath implement hain. Phase 2 mein Open VSX discovery, package management aur limited trusted Skyline web-extension runtime implement hain; VS Code extension compatibility, workspace trust, updates aur broader API abhi pending hain. Har phase ke features tabhi complete maane jayenge jab unke workflows verify hon—sirf UI controls dikhna completion nahi hai.
+Phase 1 ke core flows tests ke saath implement hain. Phase 2 mein Open VSX discovery, package management aur limited trusted Skyline web-extension runtime implement hain; VS Code extension compatibility, workspace trust, updates aur broader API abhi pending hain. Phase 5 mein JavaScript/Python file execution ka pehla slice available hai; Node.js ya Python runtime system PATH par hona chahiye. Har phase ke features tabhi complete maane jayenge jab unke workflows verify hon—sirf UI controls dikhna completion nahi hai.

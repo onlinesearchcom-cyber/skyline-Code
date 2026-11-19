@@ -16,15 +16,18 @@ import {
   FolderPlus,
   GitBranch,
   Keyboard,
+  Play,
   Puzzle,
   Search,
   Settings,
   Sparkles,
+  Square,
   X,
 } from "lucide-react";
 
 const EditorPane = lazy(() => import("./EditorPane.jsx"));
 const defaultEditorSettings = { fontSize: 13, tabSize: 2, minimap: true, wordWrap: false };
+const runnableFilePattern = /\.(?:cjs|mjs|js|py)$/i;
 const defaultKeybindings = {
   save: "Ctrl+S",
   closeTab: "Ctrl+W",
@@ -225,6 +228,8 @@ export default function App() {
   const [revealLine, setRevealLine] = useState(1);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [problems, setProblems] = useState([]);
+  const [runOutput, setRunOutput] = useState("");
+  const [runningFile, setRunningFile] = useState(false);
   const [editorSettings, setEditorSettings] = useState(loadEditorSettings);
   const [keybindings, setKeybindings] = useState(loadKeybindings);
   const [capturingKeybinding, setCapturingKeybinding] = useState(null);
@@ -285,6 +290,22 @@ export default function App() {
   useEffect(() => window.skyline.onWorkspaceWatchError((message) => {
     setNotice(`Workspace file watching failed: ${message}`);
   }), []);
+
+  useEffect(() => {
+    const removeOutputListener = window.skyline.onRunOutput((output) => {
+      setRunOutput((current) => current + output);
+    });
+    const removeExitListener = window.skyline.onRunExit((code) => {
+      setRunningFile(false);
+      setRunOutput((current) =>
+        `${current}\r\n[Process exited with code ${code ?? "unknown"}]\r\n`,
+      );
+    });
+    return () => {
+      removeOutputListener();
+      removeExitListener();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -720,6 +741,26 @@ export default function App() {
     } catch (error) {
       setNotice(`Could not save file: ${error.message}`);
     }
+  };
+
+  const runCurrentFile = async () => {
+    if (!activeTab || !runnableFilePattern.test(activeTab.path) || runningFile) return;
+    setPanelVisible(true);
+    setBottomPanel("run");
+    setRunOutput(`Running ${activeTab.name}...\r\n`);
+    setRunningFile(true);
+    try {
+      if (activeTab.dirty) await persistTab(activeTab);
+      await window.skyline.runFile(activeTab.path);
+    } catch (error) {
+      setRunningFile(false);
+      setRunOutput((current) => `${current}\r\n${error.message}\r\n`);
+      setNotice(`Could not run ${activeTab.name}: ${error.message}`);
+    }
+  };
+
+  const stopRunningFile = () => {
+    window.skyline.stopRun();
   };
 
   const updateContent = (content) => {
@@ -1165,6 +1206,9 @@ export default function App() {
     { label: "Open Folder...", shortcut: keybindings.openFolder, action: openWorkspace },
     { label: "Create New File", shortcut: keybindings.newFile, action: () => workspace && startCreate({ path: "" }) },
     { label: "Save Active File", shortcut: keybindings.save, action: saveActiveFile },
+    ...(activeTab && runnableFilePattern.test(activeTab.path)
+      ? [{ label: "Run Active File", action: runCurrentFile }]
+      : []),
     { label: "Close Active Tab", shortcut: keybindings.closeTab, action: () => activePath && closeTab(activePath) },
     { label: "Open Command Palette", shortcut: keybindings.commandPalette, action: () => setPaletteOpen(true) },
     { label: "Toggle Terminal Panel", shortcut: keybindings.terminal, action: () => { setPanelVisible(true); setBottomPanel("terminal"); } },
@@ -1604,7 +1648,7 @@ export default function App() {
 
           {activeTab ? (
             <div className="editor-wrap">
-              <div className="breadcrumbs"><span>{workspace?.name}</span><ChevronRight size={13} />{activeTab.path.split(/[\\/]/).map((part, index, parts) => <span className="crumb-piece" key={`${part}-${index}`}>{index > 0 && <ChevronRight size={12} />}{part}{index < parts.length - 1 && <span className="crumb-hidden" />}</span>)}</div>
+              <div className="breadcrumbs"><span>{workspace?.name}</span><ChevronRight size={13} />{activeTab.path.split(/[\\/]/).map((part, index, parts) => <span className="crumb-piece" key={`${part}-${index}`}>{index > 0 && <ChevronRight size={12} />}{part}{index < parts.length - 1 && <span className="crumb-hidden" />}</span>)}<button className="run-file-button" aria-label="Run current file" title="Run current JavaScript or Python file" disabled={!runnableFilePattern.test(activeTab.path)} onClick={runningFile ? stopRunningFile : runCurrentFile}>{runningFile ? <Square size={13} /> : <Play size={13} />}{runningFile ? "Stop" : "Run"}</button></div>
               {activeTab.externalChange && (
                 <div className="external-change" role="status">
                   <span>This file changed on disk. Reload it to avoid saving over newer changes.</span>
@@ -1654,7 +1698,7 @@ export default function App() {
             />
             <section className="bottom-panel" style={{ height: panelHeight, flexBasis: panelHeight }}>
               <div className="panel-tabs">
-                {["PROBLEMS", "OUTPUT", "DEBUG CONSOLE", "TERMINAL"].map((item) => (
+                {["PROBLEMS", "OUTPUT", "DEBUG CONSOLE", "RUN", "TERMINAL"].map((item) => (
                   <button key={item} className={bottomPanel === item.toLowerCase().replace(" ", "") || (item === "DEBUG CONSOLE" && bottomPanel === "debug") ? "selected" : ""} onClick={() => setBottomPanel(item.toLowerCase().replace(" ", ""))}>{item}</button>
                 ))}
                 <div className="tab-spacer" />
@@ -1665,6 +1709,15 @@ export default function App() {
                   <TerminalPane workspace={workspace} onError={setNotice} />
                 </div>
                 {bottomPanel === "output" && <pre className="diff-output">{diffOutput || "No output."}</pre>}
+                {bottomPanel === "run" && (
+                  <div className="run-panel">
+                    <div className="run-panel-toolbar">
+                      <span>{runningFile ? "Running current file" : "Run output"}</span>
+                      {runningFile && <button className="text-button" onClick={stopRunningFile}><Square size={12} /> Stop</button>}
+                    </div>
+                    <pre className="diff-output">{runOutput || "Run a JavaScript or Python file to see its output here."}</pre>
+                  </div>
+                )}
                 {bottomPanel === "problems" && (
                   <div className="problems-list">
                     {problems.length ? problems.map((problem, index) => (

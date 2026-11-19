@@ -39,6 +39,18 @@ contextBridge.exposeInMainWorld("skyline", {
   gitUnstage: (filePath) => ipcRenderer.invoke("git:unstage", filePath),
   gitCommit: (message) => ipcRenderer.invoke("git:commit", message),
   gitDiff: (filePath, staged) => ipcRenderer.invoke("git:diff", filePath, staged),
+  runFile: (filePath) => ipcRenderer.invoke("file:run", filePath),
+  stopRun: () => ipcRenderer.send("file:run-stop"),
+  onRunOutput: (callback) => {
+    const listener = (_event, output) => callback(output);
+    ipcRenderer.on("run:output", listener);
+    return () => ipcRenderer.removeListener("run:output", listener);
+  },
+  onRunExit: (callback) => {
+    const listener = (_event, code) => callback(code);
+    ipcRenderer.on("run:exit", listener);
+    return () => ipcRenderer.removeListener("run:exit", listener);
+  },
   startTerminal: () => ipcRenderer.invoke("terminal:start"),
   writeTerminal: (data) => ipcRenderer.send("terminal:write", data),
   stopTerminal: () => ipcRenderer.send("terminal:stop"),
