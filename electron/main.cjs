@@ -892,6 +892,37 @@ const createAgentEditProposal = async (tool) => {
   };
 };
 
+const createAgentNewFileProposal = async (tool) => {
+  const filePath = await resolveAgentFile(tool.arguments.path);
+  try {
+    await fs.lstat(filePath);
+    throw new Error("That workspace path already exists. Use an edit proposal instead.");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  if (tool.arguments.content.includes("\u0000")) {
+    throw new Error("The agent cannot create binary files.");
+  }
+  return {
+    kind: "new-file",
+    path: path.relative(getWorkspaceRoot(), filePath),
+    originalContent: "",
+    content: tool.arguments.content,
+  };
+};
+
+const createAgentFile = async (relativePath, content) => {
+  const filePath = await resolveAgentFile(relativePath);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const safeFilePath = await resolveAgentFile(relativePath);
+  await fs.writeFile(safeFilePath, content, { encoding: "utf8", flag: "wx" });
+  return {
+    path: path.relative(getWorkspaceRoot(), safeFilePath),
+    modifiedAt: (await fs.stat(safeFilePath)).mtimeMs,
+    version: getFileVersion(content),
+  };
+};
+
 const requestOllamaAgentResponse = async (model, messages) => {
   let response;
   try {
@@ -944,15 +975,17 @@ ipcMain.handle("agent:chat", async (event, model, inputMessages) => {
     let pendingEdit = null;
     for (const call of calls) {
       const parsed = parseAgentToolCall(call);
-      if (parsed.name === "propose_file_edit") {
+      if (parsed.name === "propose_file_edit" || parsed.name === "propose_new_file") {
         if (pendingEdit) {
           messages.push({
             role: "tool",
             tool_name: parsed.name,
-            content: JSON.stringify({ error: "Approve one file edit at a time." }),
+            content: JSON.stringify({ error: "Approve one file change at a time." }),
           });
         } else {
-          pendingEdit = await createAgentEditProposal(parsed);
+          pendingEdit = parsed.name === "propose_new_file"
+            ? await createAgentNewFileProposal(parsed)
+            : await createAgentEditProposal(parsed);
           messages.push({
             role: "tool",
             tool_name: parsed.name,
@@ -986,6 +1019,15 @@ ipcMain.handle("agent:chat", async (event, model, inputMessages) => {
     }
   }
   throw new Error("The agent reached its workspace tool limit. Ask a smaller follow-up.");
+});
+
+ipcMain.handle("agent:create-file", async (event, relativePath, content) => {
+  if (event.sender !== mainWindow?.webContents ||
+      typeof content !== "string" || content.length > 256 * 1024 ||
+      content.includes("\u0000")) {
+    throw new Error("Invalid agent file creation approval.");
+  }
+  return createAgentFile(relativePath, content);
 });
 
 ipcMain.handle("agent:apply-edit", async (event, relativePath, content, expectedVersion) => {

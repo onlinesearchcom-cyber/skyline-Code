@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld("skyline", {
     ipcRenderer.invoke("extensions:run-command", extensionId, command),
   getAgentModels: () => ipcRenderer.invoke("agent:models"),
   chatWithAgent: (model, messages) => ipcRenderer.invoke("agent:chat", model, messages),
+  createAgentFile: (relativePath, content) =>
+    ipcRenderer.invoke("agent:create-file", relativePath, content),
   applyAgentEdit: (relativePath, content, expectedVersion) =>
     ipcRenderer.invoke("agent:apply-edit", relativePath, content, expectedVersion),
   onExtensionRuntimeEvent: (callback) => {

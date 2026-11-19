@@ -68,6 +68,9 @@ kbd { font-family: "Cascadia Code", "Consolas", monospace; font-size: 9px; color
 .agent-toolbar { display: flex; align-items: center; gap: 6px; }
 .agent-toolbar select { min-width: 0; flex: 1; height: 28px; color: #d7dbe4; background: #22252d; border: 1px solid #393d47; border-radius: 4px; font-size: 10px; }
 .agent-local-note { margin: 0; color: #82c8a9; font-size: 9px; }
+.skyline-update-note { padding: 8px; color: #c4cce0; background: #222738; border: 1px solid #394765; border-radius: 5px; }
+.skyline-update-note > strong { color: #dce5ff; font-size: 10px; }
+.skyline-update-note > p { margin: 5px 0 0; font-size: 9px; line-height: 1.5; }
 .agent-transcript { min-height: 70px; flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
 .agent-message { padding: 8px; border: 1px solid #30333b; border-radius: 5px; background: #1d2027; }
 .agent-message.user { background: #202734; border-color: #39465d; }

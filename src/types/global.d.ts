@@ -74,6 +74,11 @@ interface SkylineBridge {
     text: string;
     pendingEdit: SkylineAgentEditProposal | null;
   }>;
+  createAgentFile(relativePath: string, content: string): Promise<{
+    path: string;
+    modifiedAt: number;
+    version: string;
+  }>;
   applyAgentEdit(relativePath: string, content: string, expectedVersion: string): Promise<{
     path: string;
     modifiedAt: number;
@@ -129,10 +134,11 @@ interface SkylineAgentMessage {
 }
 
 interface SkylineAgentEditProposal {
+  kind?: "new-file";
   path: string;
   originalContent: string;
   content: string;
-  expectedVersion: string;
+  expectedVersion?: string;
 }
 
 interface Window {

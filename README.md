@@ -26,7 +26,8 @@ Production renderer build ke liye `npm run build` chalao; uske baad `npm start` 
 - External file changes par clean tabs auto-reload; edited tabs ke liye reload prompt aur overwrite protection
 - Drag/keyboard se sidebar aur bottom panel resize; layout preferences save hoti hain
 - User/workspace editor settings (`.vscode/settings.json`) aur editable keyboard shortcuts
-- Local AI Agent via Ollama: workspace search/read aur approval ke baad file edits (shell commands execute nahi karta)
+- Local AI Agent via Ollama: workspace search/read, nayi files banana aur existing files edit karna (har badlav ke liye approval; shell commands execute nahi karta)
+- Activity bar mein “Update Skyline Code” option, jo AI Agent ko source-workspace aur edit-approval guidance ke saath kholta hai
 - Open VSX se extensions search, VSIX package download, installed-package list aur uninstall
 - `npm test`, `npm run test:ui`, `npm run lint`, `npm run typecheck`, aur `npm run check`
 

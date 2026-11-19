@@ -49,9 +49,15 @@ test("agent tool arguments are checked before workspace access", () => {
   assert.deepEqual(parseAgentToolCall({
     function: { name: "search_workspace", arguments: '{"query":"  TODO  "}' },
   }), { name: "search_workspace", arguments: { query: "TODO" } });
+  assert.deepEqual(parseAgentToolCall({
+    function: { name: "propose_new_file", arguments: { path: "src\\tool.js", content: "export {};" } },
+  }), { name: "propose_new_file", arguments: { path: "src\\tool.js", content: "export {};" } });
   assert.throws(() => parseAgentToolCall({
     function: { name: "run_shell", arguments: {} },
   }), /unsupported workspace tool/);
+  assert.throws(() => parseAgentToolCall({
+    function: { name: "propose_new_file", arguments: { path: "src/tool.js", content: "x".repeat(300000) } },
+  }), /invalid tool arguments/);
   assert.throws(() => parseAgentToolCall({
     function: { name: "propose_file_edit", arguments: { path: "src/App.jsx", content: "x".repeat(300000) } },
   }), /invalid tool arguments/);

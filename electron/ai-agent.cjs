@@ -38,6 +38,21 @@ const agentTools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "propose_new_file",
+      description: "Prepare a complete new workspace file that does not already exist. The user must approve it before it is written.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          content: { type: "string" },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
 ];
 
 const toolNames = new Set(agentTools.map((tool) => tool.function.name));
@@ -131,6 +146,11 @@ const parseAgentToolCall = (call) => {
     return { name, arguments: { path: args.path } };
   }
   if (name === "propose_file_edit" && typeof args.path === "string" &&
+      args.path.length > 0 && args.path.length <= 500 &&
+      typeof args.content === "string" && args.content.length <= 256 * 1024) {
+    return { name, arguments: { path: args.path, content: args.content } };
+  }
+  if (name === "propose_new_file" && typeof args.path === "string" &&
       args.path.length > 0 && args.path.length <= 500 &&
       typeof args.content === "string" && args.content.length <= 256 * 1024) {
     return { name, arguments: { path: args.path, content: args.content } };

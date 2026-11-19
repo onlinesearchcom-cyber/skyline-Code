@@ -32,6 +32,7 @@ export function installBrowserBridge() {
       text: "Skyline AI requires the desktop app.",
       pendingEdit: null,
     },
+    createAgentFile: { path: "", modifiedAt: 0, version: "browser-preview" },
     applyAgentEdit: { path: "", modifiedAt: 0, version: "browser-preview" },
     runFile: null,
     startTerminal: { running: false },

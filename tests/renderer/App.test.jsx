@@ -76,6 +76,11 @@ beforeEach(() => {
       text: "I inspected the workspace.",
       pendingEdit: null,
     }),
+    createAgentFile: vi.fn().mockResolvedValue({
+      path: "src/helper.js",
+      modifiedAt: 3,
+      version: "version-3",
+    }),
     applyAgentEdit: vi.fn().mockResolvedValue({
       path: "app.js",
       modifiedAt: 3,
@@ -416,6 +421,55 @@ describe("unsaved editor changes", () => {
     ));
     expect(await screen.findByText("The approved edit is in place.")).toBeInTheDocument();
   });
+
+  it("creates and opens a new agent-proposed file only after approval", async () => {
+    const user = userEvent.setup();
+    const proposal = {
+      kind: "new-file",
+      path: "src/helper.js",
+      originalContent: "",
+      content: "export const answer = 42;",
+    };
+    skyline.chatWithAgent
+      .mockResolvedValueOnce({
+        messages: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Create a helper file" },
+          {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              type: "function",
+              function: { name: "propose_new_file", arguments: { path: "src/helper.js", content: proposal.content } },
+            }],
+          },
+          { role: "tool", tool_name: "propose_new_file", content: '{"status":"waiting for user approval"}' },
+        ],
+        text: "Review this new file.",
+        pendingEdit: proposal,
+      })
+      .mockResolvedValueOnce({
+        messages: [],
+        text: "The helper is ready.",
+        pendingEdit: null,
+      });
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Local AI agent" }));
+    await user.type(screen.getByRole("textbox", { name: "Message local agent" }), "Create a helper file");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Proposed new file: src/helper.js")).toBeInTheDocument();
+    expect(skyline.createAgentFile).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Apply change" }));
+
+    await waitFor(() => expect(skyline.createAgentFile).toHaveBeenCalledWith(
+      "src/helper.js",
+      "export const answer = 42;",
+    ));
+    expect(await screen.findByRole("textbox", { name: "Editor" })).toHaveValue("original");
+    expect(await screen.findByText("The helper is ready.")).toBeInTheDocument();
+  });
 });
 
 describe("running the active file", () => {
@@ -448,6 +502,30 @@ describe("running the active file", () => {
     expect(skyline.saveFile).toHaveBeenCalledWith("app.js", "console.log('saved first')", "version-1");
     expect(skyline.saveFile.mock.invocationCallOrder[0]).toBeLessThan(
       skyline.runFile.mock.invocationCallOrder[0],
+    );
+  });
+});
+
+describe("Skyline Code update entry", () => {
+  it("opens the local agent with scoped guidance and sends the requested improvement", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Update Skyline Code" }));
+    expect(await screen.findByText("Update Skyline Code with AI")).toBeInTheDocument();
+    expect(screen.getByText(/can create files or propose edits only inside that folder/)).toBeInTheDocument();
+
+    const composer = screen.getByRole("textbox", { name: "Message local agent" });
+    expect(composer).toHaveAttribute("placeholder", "Describe the Skyline Code improvement...");
+    await user.type(composer, "Add a project test runner");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("I inspected the workspace.")).toBeInTheDocument();
+    expect(skyline.chatWithAgent).toHaveBeenCalledWith(
+      "llama3.2:latest",
+      expect.arrayContaining([
+        expect.objectContaining({ role: "user", content: expect.stringContaining("Add a project test runner") }),
+      ]),
     );
   });
 });

@@ -219,6 +219,7 @@ export default function App() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentError, setAgentError] = useState("");
   const [pendingAgentEdit, setPendingAgentEdit] = useState(null);
+  const [skylineUpdateMode, setSkylineUpdateMode] = useState(false);
   const [gitState, setGitState] = useState(null);
   const [gitError, setGitError] = useState("");
   const [commitMessage, setCommitMessage] = useState("");
@@ -1094,8 +1095,8 @@ export default function App() {
           content: [
             "You are Skyline Code's local coding agent.",
             "Use search_workspace and read_workspace_file to inspect the open workspace.",
-            "For file changes, call propose_file_edit with the complete replacement content.",
-            "A proposed edit is not applied until the user approves it in the editor.",
+            "For existing files, call propose_file_edit with the complete replacement content. For new files, call propose_new_file with the complete content.",
+            "A proposed file change is not applied until the user approves it in the editor.",
             "Do not run shell commands, access files outside the workspace, or claim an edit was applied before approval.",
             `Current workspace: ${workspace?.name || "unknown"}.`,
           ].join(" "),
@@ -1125,37 +1126,48 @@ export default function App() {
     try {
       let toolResult;
       if (approve) {
-        const openTab = tabs.find((tab) => tab.path === proposal.path);
-        if (openTab?.dirty) {
-          throw new Error("Save or discard this file's unsaved editor changes before applying the agent edit.");
+        if (proposal.kind === "new-file") {
+          const created = await window.skyline.createAgentFile(proposal.path, proposal.content);
+          await openFile({ path: created.path, name: shortName(created.path) });
+          toolResult = { status: "created", path: created.path };
+          setNotice(`Agent created ${shortName(created.path)}`);
+        } else {
+          const openTab = tabs.find((tab) => tab.path === proposal.path);
+          if (openTab?.dirty) {
+            throw new Error("Save or discard this file's unsaved editor changes before applying the agent edit.");
+          }
+          if (!proposal.expectedVersion) {
+            throw new Error("The agent edit is missing its expected file version.");
+          }
+          const applied = await window.skyline.applyAgentEdit(
+            proposal.path,
+            proposal.content,
+            proposal.expectedVersion,
+          );
+          setTabs((current) => current.map((tab) =>
+            tab.path === applied.path
+              ? {
+                  ...tab,
+                  content: proposal.content,
+                  savedContent: proposal.content,
+                  modifiedAt: applied.modifiedAt,
+                  version: applied.version,
+                  dirty: false,
+                  externalChange: false,
+                }
+              : tab,
+          ));
+          toolResult = { status: "applied", path: applied.path };
+          setNotice(`Agent edit applied to ${shortName(applied.path)}`);
         }
-        const applied = await window.skyline.applyAgentEdit(
-          proposal.path,
-          proposal.content,
-          proposal.expectedVersion,
-        );
-        setTabs((current) => current.map((tab) =>
-          tab.path === applied.path
-            ? {
-                ...tab,
-                content: proposal.content,
-                savedContent: proposal.content,
-                modifiedAt: applied.modifiedAt,
-                version: applied.version,
-                dirty: false,
-                externalChange: false,
-              }
-            : tab,
-        ));
-        toolResult = { status: "applied", path: applied.path };
-        setNotice(`Agent edit applied to ${shortName(applied.path)}`);
       } else {
         toolResult = { status: "rejected", path: proposal.path, message: "The user rejected this edit." };
       }
 
       const messages = [...agentMessages];
       for (let index = messages.length - 1; index >= 0; index -= 1) {
-        if (messages[index].role === "tool" && messages[index].tool_name === "propose_file_edit") {
+        if (messages[index].role === "tool" &&
+            ["propose_file_edit", "propose_new_file"].includes(messages[index].tool_name)) {
           messages[index] = {
             ...messages[index],
             content: JSON.stringify(toolResult),
@@ -1169,7 +1181,11 @@ export default function App() {
         ...current,
         {
           role: "assistant",
-          content: approve ? `Applied the proposed edit to ${proposal.path}.` : `Rejected the proposed edit to ${proposal.path}.`,
+          content: approve
+            ? proposal.kind === "new-file"
+              ? `Created the new file ${proposal.path}.`
+              : `Applied the proposed edit to ${proposal.path}.`
+            : `Rejected the proposed change to ${proposal.path}.`,
         },
       ]);
       await runAgentTurn(messages);
@@ -1186,6 +1202,12 @@ export default function App() {
     setAgentTranscript([]);
     setPendingAgentEdit(null);
     setAgentInput("");
+    setAgentError("");
+  };
+
+  const startSkylineUpdate = () => {
+    setActiveView("agent");
+    setSkylineUpdateMode(true);
     setAgentError("");
   };
 
@@ -1295,7 +1317,8 @@ export default function App() {
           <button className={`activity-button ${activeView === "search" ? "active" : ""}`} onClick={() => setActiveView("search")} title="Search"><Search size={21} /></button>
           <button className={`activity-button ${activeView === "source" ? "active" : ""}`} onClick={() => setActiveView("source")} title="Source control"><GitBranch size={21} /></button>
           <button className={`activity-button ${activeView === "extensions" ? "active" : ""}`} onClick={() => setActiveView("extensions")} title="Extensions"><Puzzle size={21} /></button>
-          <button className={`activity-button ${activeView === "agent" ? "active" : ""}`} onClick={() => setActiveView("agent")} title="Local AI agent"><Bot size={21} /></button>
+          <button className={`activity-button ${activeView === "agent" && !skylineUpdateMode ? "active" : ""}`} onClick={() => { setSkylineUpdateMode(false); setActiveView("agent"); }} title="Local AI agent"><Bot size={21} /></button>
+          <button className={`activity-button ${activeView === "agent" && skylineUpdateMode ? "active" : ""}`} aria-label="Update Skyline Code" onClick={startSkylineUpdate} title="Update Skyline Code with AI"><Sparkles size={20} /></button>
           <div className="activity-spacer" />
           <button className="activity-button" onClick={() => setNotice(`Keyboard shortcuts: ${keybindings.openFolder} open folder · ${keybindings.save} save`)} title="Keyboard shortcuts"><Keyboard size={20} /></button>
           <button className="activity-button" onClick={() => setNotice(`Skyline Code · Help: ${keybindings.commandPalette} opens commands, ${keybindings.search} searches files.`)} title="Help"><CircleHelp size={20} /></button>
@@ -1303,7 +1326,7 @@ export default function App() {
         </nav>
 
         <aside className="sidebar">
-          <div className="side-heading"><span>{activeView === "explorer" ? "EXPLORER" : activeView.toUpperCase()}</span><button className="icon-button" title="Command palette" onClick={() => setPaletteOpen(true)}><Command size={14} /></button></div>
+          <div className="side-heading"><span>{activeView === "explorer" ? "EXPLORER" : activeView === "agent" && skylineUpdateMode ? "SKYLINE UPDATE" : activeView.toUpperCase()}</span><button className="icon-button" title="Command palette" onClick={() => setPaletteOpen(true)}><Command size={14} /></button></div>
           {activeView === "explorer" ? (
             <>
               <div className="project-heading">
@@ -1449,6 +1472,12 @@ export default function App() {
                 </button>
               </div>
               <p className="agent-local-note">Local Ollama · code stays on this device</p>
+              {skylineUpdateMode && (
+                <div className="skyline-update-note">
+                  <strong>Update Skyline Code with AI</strong>
+                  <p>Open Skyline Code's source folder as the workspace first. Describe the feature you want; the agent can create files or propose edits only inside that folder, and each change needs your approval.</p>
+                </div>
+              )}
               {!workspace && <p className="empty-note">Open a workspace to let the agent inspect your code.</p>}
               <div className="agent-transcript" role="log" aria-label="Agent conversation" aria-live="polite">
                 {!agentTranscript.length && (
@@ -1465,11 +1494,15 @@ export default function App() {
               </div>
               {pendingAgentEdit && (
                 <div className="agent-edit-proposal">
-                  <strong>Proposed edit: {pendingAgentEdit.path}</strong>
+                  <strong>{pendingAgentEdit.kind === "new-file" ? "Proposed new file:" : "Proposed edit:"} {pendingAgentEdit.path}</strong>
                   <details>
-                    <summary>Review current and proposed file contents</summary>
-                    <strong>Current</strong>
-                    <pre>{pendingAgentEdit.originalContent}</pre>
+                    <summary>{pendingAgentEdit.kind === "new-file" ? "Review proposed file contents" : "Review current and proposed file contents"}</summary>
+                    {pendingAgentEdit.kind !== "new-file" && (
+                      <>
+                        <strong>Current</strong>
+                        <pre>{pendingAgentEdit.originalContent}</pre>
+                      </>
+                    )}
                     <strong>Proposed</strong>
                     <pre>{pendingAgentEdit.content}</pre>
                   </details>
@@ -1495,7 +1528,7 @@ export default function App() {
                       sendAgentMessage(event);
                     }
                   }}
-                  placeholder="Ask the local agent..."
+                  placeholder={skylineUpdateMode ? "Describe the Skyline Code improvement..." : "Ask the local agent..."}
                   maxLength={4000}
                   disabled={!workspace || !agentModel || agentBusy || Boolean(pendingAgentEdit)}
                 />
