@@ -11,6 +11,11 @@ npm run dev
 
 Production renderer build ke liye `npm run build` chalao; uske baad `npm start` se desktop app launch hoga.
 
+## Windows test installer
+
+Latest Windows x64 installer: [GitHub Releases](https://github.com/onlinesearchcom-cyber/skyline-Code/releases/latest).
+Installer is unsigned, so Windows SmartScreen may show a warning. Local AI Agent ke liye Ollama alag se install hona chahiye.
+
 ## Abhi available
 
 - Folder open karna, file explorer aur file filtering
@@ -30,6 +35,7 @@ Production renderer build ke liye `npm run build` chalao; uske baad `npm start` 
 - Activity bar mein “Update Skyline Code” option, jo AI Agent ko source-workspace aur edit-approval guidance ke saath kholta hai
 - Open VSX se extensions search, VSIX package download, installed-package list aur uninstall
 - `npm test`, `npm run test:ui`, `npm run lint`, `npm run typecheck`, aur `npm run check`
+- Windows x64 installer banane ke liye `npm run dist`
 
 Compatible Skyline web extensions ab explicit per-extension trust ke baad isolated Worker mein run ho sakte hain; Node.js, filesystem aur network access available nahi hai. Abhi sirf limited Skyline API (commands aur information messages) supported hai. VS Code extension API compatibility, extension updates, debugger adapters, remote development, full language-server ecosystem aur standalone installer abhi pending hain. Yeh VS Code ka exact clone ya feature-complete replacement nahi hai.
 
